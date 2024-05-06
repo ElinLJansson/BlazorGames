@@ -1,0 +1,164 @@
+﻿@page "/tetris"
+@using Games.Models.Tetris
+@using Games.Models.Tetris.Tetrominos
+@using Games.Models.Tetris.Enums
+@using Games.Pages.Partials
+@inject IJSRuntime _jsRuntime;
+
+@code {
+    Grid grid = new();
+    Tetromino currentTetromino;
+    TetrominoGenerator generator = new();
+    TetrominoStyle nextStyle;
+    TetrominoStyle secondNextStyle;
+    TetrominoStyle thirdNextStyle;
+
+    int standardDelay = 1000;
+    bool skipDelay = false;
+    protected ElementReference gameBoardDiv;
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await _jsRuntime.InvokeVoidAsync("SetFocusToElement", gameBoardDiv);
+        }
+    }
+
+    public async Task RunGame()
+    {
+        nextStyle = generator.Next();
+        secondNextStyle = generator.Next(nextStyle);
+        thirdNextStyle = generator.Next(nextStyle, secondNextStyle);
+
+        grid.State = GameState.Playing;
+
+        await _jsRuntime.InvokeVoidAsync("SetFocusToElement", gameBoardDiv);
+
+        while (!grid.Cells.HasRow(21))
+        {
+            currentTetromino = generator.CreateFromStyle(nextStyle, grid);
+            nextStyle = secondNextStyle;
+            secondNextStyle = thirdNextStyle;
+            thirdNextStyle = generator.Next(currentTetromino.Style, nextStyle, secondNextStyle);
+            StateHasChanged();
+
+            await RunCurrentTetromino();
+
+            await ClearCompleteRows();
+        }
+        grid.State = GameState.GameOver;
+    }
+    public async Task Delay(int millis)
+    {
+        int totalDelay = 0;
+        while (totalDelay < millis && !skipDelay)
+        {
+            totalDelay += 50;
+            await Task.Delay(50);
+        }
+        skipDelay = false;
+    }
+    public async Task RunCurrentTetromino()
+    {
+        while (currentTetromino.CanMoveDown())
+        {
+            await Delay(standardDelay);
+            currentTetromino.Movedown();
+            StateHasChanged();
+        }
+        grid.Cells.AddMany(currentTetromino.CoverdCells.GetAllCells(), currentTetromino.CssClass);
+    }
+    protected async Task KeyDown(KeyboardEventArgs e)
+    {
+        if(grid.State == GameState.Playing)
+        {
+            if(e.Key == "ArrowRight")
+            {
+                currentTetromino.MoveRight();
+            }
+            if (e.Key == "ArrowLeft")
+            {
+                currentTetromino.MoveLeft();
+            }
+            if (e.Key == "ArrowUp")
+            {
+                currentTetromino.Rotate();
+            }
+            if (e.Key == " ")
+            {
+                int score = currentTetromino.Drop();
+                skipDelay = true;
+                StateHasChanged();
+            }
+            if (e.Key == "ArrowDown")
+            {
+                currentTetromino.Movedown();
+                skipDelay = true;
+                StateHasChanged();
+            }
+            StateHasChanged();
+        }
+    }
+    public async Task ClearCompleteRows()
+    {
+        List<int> rowsComplete = new();
+        for(int i = 1; i <= grid.Height; i++)
+        {
+            if(grid.Cells.GetAllCellsInRow(i).Count == grid.Width)
+            {
+                grid.Cells.SetCssClass(i, "tetris-clear-row");
+                rowsComplete.Add(i);
+            }
+        }
+        if (rowsComplete.Any())
+        {
+            StateHasChanged();
+            grid.Cells.CollapseRows(rowsComplete);
+            await Task.Delay(1000);
+        }
+        grid.State = GameState.Playing;
+    }
+}
+<PageTitle>Tetris</PageTitle>
+<h1>Tetris</h1>
+<div class="row">
+    <div class="col">
+        @if (grid.State == GameState.NotStarted)
+        {
+            <button @onclick="RunGame" class="btn btn-lg btn-outline-primary mb-3">Start!</button>
+        }
+    </div>
+</div>
+<div class="row">
+    <div class="col">
+        <div class="tetris-container" tabindex="0" @onkeydown="KeyDown" @ref="gameBoardDiv">
+            @for(int i = grid.Height; i >= 1; i--)
+            {
+                <div class="tetris-row">
+                    @for(int j = 1; j <= grid.Width; j++)
+                    {
+                        <TetrisGridCell Row="i" Column="j" Tetromino="currentTetromino" Grid="grid" />
+                    }
+                </div>
+            }
+        </div>
+    </div>
+    <div class="col">
+        @if(grid.State == GameState.GameOver)
+        {
+            <h1>Game Over!</h1>
+        }
+        @if (grid.IsStarted)
+        {
+            <div class="row">
+                <div class="col">
+                    <h2>Upcoming Pieces</h2>
+                </div>
+            </div>
+            <TetrisTetrominoDisplay Style="nextStyle" />
+            <TetrisTetrominoDisplay Style="secondNextStyle" />
+            <TetrisTetrominoDisplay Style="thirdNextStyle"/>
+        }
+    </div>
+</div>
