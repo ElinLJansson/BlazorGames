@@ -31,10 +31,10 @@
         secondNextStyle = generator.Next(nextStyle);
         thirdNextStyle = generator.Next(nextStyle, secondNextStyle);
 
-        grid.State = GameState.Playing;
+        
 
         await _jsRuntime.InvokeVoidAsync("SetFocusToElement", gameBoardDiv);
-
+        grid.State = GameState.Playing;
         while (!grid.Cells.HasRow(21))
         {
             currentTetromino = generator.CreateFromStyle(nextStyle, grid);

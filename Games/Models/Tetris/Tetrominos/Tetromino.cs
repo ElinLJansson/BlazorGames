@@ -17,6 +17,10 @@ public class Tetromino
         CenterPieceRow = grid.Height;
         CenterPieceColumn = grid.Width / 2;
     }
+    public Tetromino()
+    {
+
+    }
     public void MoveLeft()
     {
         if (CanMoveLeft())
